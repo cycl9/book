@@ -61,7 +61,7 @@ class SQLiteContactDaoTest {
         dao.insert(sample());
         dao.insert(new Contact("Сидоров", "Сидор", "", "9001234567", "", "", null, ""));
 
-        var result = dao.search("пет");
+        var result = dao.search("Пет");
         assertEquals(1, result.size());
         assertEquals("Петров", result.get(0).getSurname());
     }

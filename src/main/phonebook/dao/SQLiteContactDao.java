@@ -7,22 +7,18 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Реализация ContactDao поверх SQLite.
- * При первом запуске автоматически создаёт таблицу contacts.
- *
- * Файл базы данных: phonebook.db (рядом с jar-файлом).
- */
 public class SQLiteContactDao implements ContactDao {
 
-    private final String url;
+    private final Connection conn;
 
     public SQLiteContactDao(String dbPath) {
-        this.url = "jdbc:sqlite:" + dbPath;
+        try {
+            this.conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        } catch (SQLException e) {
+            throw new RuntimeException("Не удалось подключиться к БД: " + e.getMessage(), e);
+        }
         initSchema();
     }
-
-    // ── DDL ───────────────────────────────────────────────────────────────────
 
     private void initSchema() {
         var sql = """
@@ -34,18 +30,16 @@ public class SQLiteContactDao implements ContactDao {
                     mobile_phone TEXT    NOT NULL DEFAULT '',
                     home_phone   TEXT    NOT NULL DEFAULT '',
                     address      TEXT    NOT NULL DEFAULT '',
-                    birthday     INTEGER,          -- Unix-timestamp (мс), NULL если не указана
+                    birthday     INTEGER,
                     comment      TEXT    NOT NULL DEFAULT ''
                 )
                 """;
-        try (var conn = connect(); var st = conn.createStatement()) {
+        try (var st = conn.createStatement()) {
             st.execute(sql);
         } catch (SQLException e) {
             throw new RuntimeException("Не удалось инициализировать схему БД: " + e.getMessage(), e);
         }
     }
-
-    // ── CRUD ──────────────────────────────────────────────────────────────────
 
     @Override
     public Contact insert(Contact c) throws SQLException {
@@ -54,8 +48,7 @@ public class SQLiteContactDao implements ContactDao {
                     (surname, name, patronymic, mobile_phone, home_phone, address, birthday, comment)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """;
-        try (var conn = connect();
-             var ps   = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+        try (var ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             bind(ps, c);
             ps.executeUpdate();
             try (var keys = ps.getGeneratedKeys()) {
@@ -74,7 +67,7 @@ public class SQLiteContactDao implements ContactDao {
                     address=?, birthday=?, comment=?
                 WHERE id=?
                 """;
-        try (var conn = connect(); var ps = conn.prepareStatement(sql)) {
+        try (var ps = conn.prepareStatement(sql)) {
             bind(ps, c);
             ps.setLong(9, c.getId());
             ps.executeUpdate();
@@ -83,7 +76,7 @@ public class SQLiteContactDao implements ContactDao {
 
     @Override
     public void delete(long id) throws SQLException {
-        try (var conn = connect(); var ps = conn.prepareStatement("DELETE FROM contacts WHERE id=?")) {
+        try (var ps = conn.prepareStatement("DELETE FROM contacts WHERE id=?")) {
             ps.setLong(1, id);
             ps.executeUpdate();
         }
@@ -111,13 +104,6 @@ public class SQLiteContactDao implements ContactDao {
         });
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private Connection connect() throws SQLException {
-        return DriverManager.getConnection(url);
-    }
-
-    /** Привязывает поля контакта к позициям 1–8 PreparedStatement. */
     private static void bind(PreparedStatement ps, Contact c) throws SQLException {
         ps.setString(1, c.getSurname());
         ps.setString(2, c.getName());
@@ -135,7 +121,7 @@ public class SQLiteContactDao implements ContactDao {
 
     private List<Contact> query(String sql, Binder binder) throws SQLException {
         var list = new ArrayList<Contact>();
-        try (var conn = connect(); var ps = conn.prepareStatement(sql)) {
+        try (var ps = conn.prepareStatement(sql)) {
             if (binder != null) binder.bind(ps);
             try (var rs = ps.executeQuery()) {
                 while (rs.next()) list.add(map(rs));
