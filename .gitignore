@@ -1,0 +1,9 @@
+# Папка сборки Maven
+target/
+
+# Файлы IntelliJ IDEA
+.idea/
+*.iml
+
+# Скомпилированные классы
+*.class
